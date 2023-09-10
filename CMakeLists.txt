@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
+project(nuke)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_SHARED_LIBRARY_PREFIX "")
+add_library(nuke SHARED nuke.cpp)
+target_link_libraries(nuke -lfcgi)
