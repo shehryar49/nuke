@@ -1,6 +1,7 @@
 #ifndef APP_H_
 #define APP_H_
 #include "nuke.h"
+#include "request.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,13 +64,18 @@ PltObject APP_ROUTE(PltObject* args,int32_t n)
   const string& method = *(string*)args[1].ptr;
   KlassObject* self = (KlassObject*)args[0].ptr;
   route* r = (route*)self->members[".routetable"].ptr;
-  const string& path = *(string*)args[2].ptr;
-    
+  string path = AS_STR(args[2]);
+  if(path.length() == 0)
+    return Plt_Err(ValueError,"Empty string passed!");
+  if(path[0]!='/')
+    return Plt_Err(ValueError,"Error path must begin with a '/' ");
+  if(path.back() == '/' && path.length()!=1)
+    path.pop_back();
   size_t len = path.size();
   bool hasParam = false;
   size_t start = 0;
   string tmp;
-  
+  char last = 0;
   for(size_t i=0;i<len;i++)
   {
     if(path[i] == '<')
@@ -114,6 +120,7 @@ PltObject APP_ROUTE(PltObject* args,int32_t n)
       
       start = idx+1;
     }
+    last = path[i];
   }
   
 /*  if(hasParam)
@@ -169,44 +176,70 @@ PltObject APP_RUN(PltObject* args,int32_t n)
   if(args[2].type!=PLT_INT)
     return Plt_Err(TypeError,"Argument 2 must be an integer!");
   if(args[2].i <= 0)
-    return Plt_Err(ValueError,"Argument 2 must be a positive integer!");
-  int32_t maxConnections = args[2].i;
+    return Plt_Err(ValueError,"Argument 2 must be a positive and non zero integer!");
+  int32_t maxConnections = AS_INT(args[2]);
   const string& ip = *(string*)args[1].ptr;
   std::string tmp;
+  std::string tmp2;
   vector<string> parts;
   vector<PltObject> A;
   KlassObject* self = (KlassObject*)args[0].ptr;
   route* r = (route*)self->members[".routetable"].ptr;
   FCGX_Init();
-  int sock = FCGX_OpenSocket(ip.c_str(),args[2].i);
+  int sock = FCGX_OpenSocket(ip.c_str(),maxConnections);
   FCGX_Request req;
   int count = 0;
   std::unordered_map<string,PltObject>::iterator it;
+  KlassObject reqObj;
+  reqObj.klass = reqKlass;
+  reqObj.members = reqKlass->members;
+  reqObj.privateMembers = reqKlass->privateMembers;
+  reqObj.members[".ptr"] = PObjFromPtr((void*)&req);
+  Dictionary* argDict = vm_allocDict();
+  reqObj.members["args"] = PObjFromDict(argDict);
+  vm_markImportant(argDict);
+
   FCGX_InitRequest(&req,sock,0);
+  
   printf("[+] Server started at %s\n",ip.c_str());
   while(FCGX_Accept_r(&req) >= 0)
   {
     char* method = FCGX_GetParam("REQUEST_METHOD",req.envp);
     char* addr = FCGX_GetParam("REMOTE_ADDR",req.envp);
     char* path = FCGX_GetParam("SCRIPT_NAME",req.envp);
-    path += 5;
+    path += 5;//skip /nuke from start of url
     tmp = path;
     printf("[+] Serving %s to host %s\n",tmp.c_str(),addr);
   
     if(tmp.length()!=1 && tmp.back() == '/')
       tmp.pop_back();
-    tmp = (string)method+tmp;
+    tmp2 = (string)method+tmp;
     //Check for absolute route
-    if((it = self->members.find(tmp))!=self->members.end())
+    if((it = self->members.find(tmp2))!=self->members.end())
     {
       PltObject callback = (*it).second;
       PltObject rr;
       A.clear();
+      A.push_back(PObjFromKlassObj(&reqObj));
+      argDict->clear();
+      char* qstr = FCGX_GetParam("QUERY_STRING",req.envp);
+      if(strcmp(method,"GET") == 0 && qstr)
+      {
+        vector<string> pairs = split((string)qstr,"&");
+        for(auto pair: pairs)
+        {
+          vector<string> eq = split(pair,"=");
+          if(eq.size()!=2)
+             break;
+          eq[0] = url_decode(eq[0]);
+          eq[1] = url_decode(eq[1]);
+          argDict->emplace(PObjFromStr(eq[0]),PObjFromStr(eq[1]));
+        }
+      }
       handleCB(req,A,callback);
     }
     else
     {
-      tmp = path;
       if(tmp.size() > 1)
         tmp.erase(tmp.begin());
       if(tmp.size() > 1 && tmp.back() == '/')
@@ -223,6 +256,7 @@ PltObject APP_RUN(PltObject* args,int32_t n)
           size_t len = parts.size();
           bool match = true;
           vector<PltObject> args;
+          args.push_back(PObjFromKlassObj(&reqObj));
           for(size_t j=0;j<len;j++)
           {
             if(r->parts[i][j] != parts[j])
@@ -249,7 +283,7 @@ PltObject APP_RUN(PltObject* args,int32_t n)
       }
       if(!handled)
       {
-        printf("[-] Unhandled path %s requested by host. Sending Status 500\n",path);
+        printf("[-] Unhandled path %s %s requested by host. Sending Status 500\n",method,path);
         FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\n");
       }
     }
@@ -260,4 +294,18 @@ PltObject APP_RUN(PltObject* args,int32_t n)
   return nil;
 }
 
+PltObject APP_DEL(PltObject* args,int32_t n)
+{
+  if(n!=1)
+    return Plt_Err(ArgumentError,"0 arguments needed!");
+  if(args[0].type != PLT_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
+    return Plt_Err(TypeError,"'self' must be an object of app class.");
+  KlassObject* self = (KlassObject*)args[0].ptr;
+  if(self->members[".routetable"].type == PLT_POINTER)
+  {
+    route* r = (route*)self->members[".routetable"].ptr;
+    delete r;
+  }
+  return nil;
+}
 #endif

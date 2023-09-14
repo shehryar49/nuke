@@ -9,7 +9,6 @@ extern Klass* resKlass;
 extern Klass* reqKlass;
 PltObject nil;
 
-
 PltObject init()
 {
   nil.type = PLT_NIL;
@@ -25,8 +24,17 @@ PltObject init()
   resKlass->name = "response";
   resKlass->members.emplace("__construct__",PObjFromMethod("__construct__",&RES_CONSTRUCT,resKlass));
 
+  reqKlass = vm_allocKlass();
+  reqKlass->name = "request";
+  reqKlass->members.emplace("cookies",nil);
+  reqKlass->members.emplace("args",nil);
+  reqKlass->members.emplace("form",nil);
+  reqKlass->members.emplace("getenv",PObjFromMethod("GetParam",&GetParam,reqKlass));
+  
+  
 
   m->members.emplace("app",PObjFromKlass(appKlass));
   m->members.emplace("response",PObjFromKlass(resKlass));
+  m->members.emplace("request",PObjFromKlass(reqKlass));
   return PObjFromModule(m);
 }
