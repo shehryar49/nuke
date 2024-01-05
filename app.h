@@ -6,69 +6,75 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <vector>
+#include <string>
 #include <fcgiapp.h>
+#include "utils.h"
+using namespace std;
 
 Klass* appKlass;
 
 extern "C"
 {
     //App methods
-    EXPORT PltObject APP_CONSTRUCT(PltObject*,int32_t);
-    EXPORT PltObject APP_ROUTE(PltObject*,int32_t);
-    EXPORT PltObject APP_RUN(PltObject*,int32_t);  
+    EXPORT ZObject APP_CONSTRUCT(ZObject*,int32_t);
+    EXPORT ZObject APP_ROUTE(ZObject*,int32_t);
+    EXPORT ZObject APP_RUN(ZObject*,int32_t);  
 }
 struct route //for dynamic routes (involving variables)
 {
   std::vector<vector<string>> parts;
   std::vector<vector<bool>> dyn;
-  std::vector<PltObject> callbacks;
+  std::vector<ZObject> callbacks;
   std::vector<string> reqMethods;
 };
 
 
 // Implementations
 
-extern PltObject nil;
+extern ZObject nil;
 extern Klass* appKlass;
 extern Klass* resKlass;
 
 //App methods
-PltObject APP_CONSTRUCT(PltObject* args,int32_t n)
+ZObject APP_CONSTRUCT(ZObject* args,int32_t n)
 {
   if(n!=1)
-    return Plt_Err(ArgumentError,"0 arguments needed!");
+    return Z_Err(ArgumentError,"0 arguments needed!");
 
-  if(args[0].type != PLT_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
-    return Plt_Err(TypeError,"'self' must be an object of app class.");
+  if(args[0].type != Z_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
+    return Z_Err(TypeError,"'self' must be an object of app class.");
 
   KlassObject* self = (KlassObject*)args[0].ptr;
   route* r = new route;
-  self->members.emplace(".routetable",PObjFromPtr((void*)r));
+  KlassObj_setMember(self,".routetable",ZObjFromPtr((void*)r));
+  
   return nil; 
 }
-PltObject APP_ROUTE(PltObject* args,int32_t n)
+ZObject APP_ROUTE(ZObject* args,int32_t n)
 {
   if(n!=4)
-    return Plt_Err(ArgumentError,"3 argument needed!");
+    return Z_Err(ArgumentError,"3 argument needed!");
 
-  if(args[0].type != PLT_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
-    return Plt_Err(TypeError,"'self' must be an object of app class.");
-  if(args[1].type!=PLT_STR || args[2].type!=PLT_STR)
-    return Plt_Err(TypeError,"Argument 1 and 2 must be strings!");
-  if(args[3].type!=PLT_FUNC)
-    return Plt_Err(TypeError,"Argument 3 must be a callback function!");
+  if(args[0].type != Z_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
+    return Z_Err(TypeError,"'self' must be an object of app class.");
+  if(args[1].type!=Z_STR || args[2].type!=Z_STR)
+    return Z_Err(TypeError,"Argument 1 and 2 must be strings!");
+  if(args[3].type!=Z_FUNC)
+    return Z_Err(TypeError,"Argument 3 must be a callback function!");
   FunObject* fun = (FunObject*)args[3].ptr;
-  if(fun -> opt.size()!=0)
-    return Plt_Err(ValueError,"Callback function must not take any optional args!");
+  if(fun -> opt.size!=0)
+    return Z_Err(ValueError,"Callback function must not take any optional args!");
 
-  const string& method = *(string*)args[1].ptr;
+  string method = AS_STR(args[1])->val;
   KlassObject* self = (KlassObject*)args[0].ptr;
-  route* r = (route*)self->members[".routetable"].ptr;
-  string path = AS_STR(args[2]);
+
+  route* r = (route*)AS_PTR(KlassObj_getMember(self,".routetable"));
+  string path = AS_STR(args[2])->val;
   if(path.length() == 0)
-    return Plt_Err(ValueError,"Empty string passed!");
+    return Z_Err(ValueError,"Empty string passed!");
   if(path[0]!='/')
-    return Plt_Err(ValueError,"Error path must begin with a '/' ");
+    return Z_Err(ValueError,"Error path must begin with a '/' ");
   if(path.back() == '/' && path.length()!=1)
     path.pop_back();
   size_t len = path.size();
@@ -93,10 +99,10 @@ PltObject APP_ROUTE(PltObject* args,int32_t n)
         else if(isalpha(path[j]) || isdigit(path[j]))
         ;
         else
-          return Plt_Err(ValueError,(string)"Illegal character in path parameter name!");
+          return Z_Err(ValueError,"Illegal character in path parameter name!");
       }
       if(!found)
-        return Plt_Err(Error,"Invalid '<' is unmatched");
+        return Z_Err(Error,"Invalid '<' is unmatched");
       if(!hasParam)
       {
         r->parts.push_back(vector<string>{});
@@ -123,21 +129,16 @@ PltObject APP_ROUTE(PltObject* args,int32_t n)
     last = path[i];
   }
   
-/*  if(hasParam)
-  {
-    size_t k=0;
-    for(auto e: r->parts.back())
-    {
-      if(r->dyn.back()[k])
-        printf("dynamic  ");
-      puts(e.c_str());
-      k++;
-    }
-  }*/
+
   if(method != "GET" && method!="POST" && method!="PUT" && method!="DELETE")
-    return Plt_Err(ValueError,"Unknown request method!");
+    return Z_Err(ValueError,"Unknown request method!");
   if(!hasParam) // absolute path
-    self->members.emplace(method+(string)path,args[3]);
+  {
+    string str = method + path;
+    ZObject p = ZObjFromStr(str.c_str());
+    vm_markImportant(p.ptr); // won't be required in the future
+    KlassObj_setMember(self,AS_STR(p)->val,args[3]);
+  }
   else //dynamic path with parameters
   {
     r->callbacks.push_back(args[3]);
@@ -146,62 +147,61 @@ PltObject APP_ROUTE(PltObject* args,int32_t n)
   vm_markImportant(args[3].ptr);
   return nil;
 }
-void handleCB(FCGX_Request& req,vector<PltObject>& args,PltObject callback)
+void handleCB(FCGX_Request& req,vector<ZObject>& args,ZObject callback)
 {
-  PltObject rr;
-  PltObject* arr = (args.size() == 0) ? NULL : &args[0];
+  ZObject rr;
+  ZObject* arr = (args.size() == 0) ? NULL : &args[0];
   bool good = vm_callObject(&callback,arr,(int32_t)args.size(),&rr);
-  if(!good || rr.type!=PLT_OBJ || ((KlassObject*)rr.ptr)->klass!=resKlass)
+  if(!good || rr.type!=Z_OBJ || ((KlassObject*)rr.ptr)->klass!=resKlass)
   {
-    printf("Callback: %s\n",((string*)(((KlassObject*)rr.ptr)->members["msg"].ptr))->c_str());
+    ZObject msg = KlassObj_getMember((KlassObject*)rr.ptr,"msg");
+    printf("Callback: %s\n",AS_STR(msg)->val);
     printf("[-] Invalid response by callback. Sending Status 500\n");
     FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\n");
   }
   else
   {
     KlassObject* obj = (KlassObject*)rr.ptr;
-    const string& type = *(string*)obj->members[".type"].ptr;
-    const string& content = *(string*)obj->members[".content"].ptr;
-    FCGX_FPrintF(req.out,"Content-type: %s\r\n\r\n%s",type.c_str(),content.c_str());
+    const char* type = AS_STR(KlassObj_getMember(obj,".type"))->val;
+    const char* content = AS_STR(KlassObj_getMember(obj,".content"))->val;
+    FCGX_FPrintF(req.out,"Content-type: %s\r\n\r\n%s",type,content);
   }
 }
-PltObject APP_RUN(PltObject* args,int32_t n)
+ZObject APP_RUN(ZObject* args,int32_t n)
 {
   if(n!=3)
-    return Plt_Err(ArgumentError,"2 arguments needed!");
-  if(args[0].type != PLT_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
-    return Plt_Err(TypeError,"'self' must be an object of app class.");
-  if(args[1].type!=PLT_STR)
-    return Plt_Err(TypeError,"Argument 1 must be a string!");
-  if(args[2].type!=PLT_INT)
-    return Plt_Err(TypeError,"Argument 2 must be an integer!");
+    return Z_Err(ArgumentError,"2 arguments needed!");
+  if(args[0].type != Z_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
+    return Z_Err(TypeError,"'self' must be an object of app class.");
+  if(args[1].type!=Z_STR)
+    return Z_Err(TypeError,"Argument 1 must be a string!");
+  if(args[2].type!=Z_INT)
+    return Z_Err(TypeError,"Argument 2 must be an integer!");
   if(args[2].i <= 0)
-    return Plt_Err(ValueError,"Argument 2 must be a positive and non zero integer!");
+    return Z_Err(ValueError,"Argument 2 must be a positive and non zero integer!");
   int32_t maxConnections = AS_INT(args[2]);
-  const string& ip = *(string*)args[1].ptr;
+  const char* ip = AS_STR(args[1])->val;
   std::string tmp;
   std::string tmp2;
   vector<string> parts;
-  vector<PltObject> A;
+  vector<ZObject> A;
   KlassObject* self = (KlassObject*)args[0].ptr;
-  route* r = (route*)self->members[".routetable"].ptr;
+  route* r = (route*)AS_PTR(KlassObj_getMember(self,".routetable"));
   FCGX_Init();
-  int sock = FCGX_OpenSocket(ip.c_str(),maxConnections);
+  int sock = FCGX_OpenSocket(ip,maxConnections);
   FCGX_Request req;
-  int count = 0;
-  std::unordered_map<string,PltObject>::iterator it;
-  KlassObject reqObj;
-  reqObj.klass = reqKlass;
-  reqObj.members = reqKlass->members;
-  reqObj.privateMembers = reqKlass->privateMembers;
-  reqObj.members[".ptr"] = PObjFromPtr((void*)&req);
-  Dictionary* argDict = vm_allocDict();
-  reqObj.members["args"] = PObjFromDict(argDict);
+  //int count = 0;
+  //std::unordered_map<string,ZObject>::iterator it;
+  KlassObject* reqObj = vm_allocKlassObject(reqKlass);
+  vm_markImportant(reqObj);
+  ZDict* argDict = vm_allocDict();
+  KlassObj_setMember(reqObj,".ptr",ZObjFromPtr((void*)&req));
+  KlassObj_setMember(reqObj,"args",ZObjFromDict(argDict));
   vm_markImportant(argDict);
 
   FCGX_InitRequest(&req,sock,0);
   
-  printf("[+] Server started at %s\n",ip.c_str());
+  printf("[+] Server started at %s\n",ip);
   while(FCGX_Accept_r(&req) >= 0)
   {
     char* method = FCGX_GetParam("REQUEST_METHOD",req.envp);
@@ -209,19 +209,19 @@ PltObject APP_RUN(PltObject* args,int32_t n)
     char* path = FCGX_GetParam("SCRIPT_NAME",req.envp);
     path += 5;//skip /nuke from start of url
     tmp = path;
-    printf("[+] Serving %s to host %s\n",tmp.c_str(),addr);
+    //printf("[+] Serving %s to host %s\n",tmp.c_str(),addr);
   
     if(tmp.length()!=1 && tmp.back() == '/')
       tmp.pop_back();
     tmp2 = (string)method+tmp;
     //Check for absolute route
-    if((it = self->members.find(tmp2))!=self->members.end())
+    ZObject callback;
+    if(StrMap_get(&(self->members),tmp2.c_str(),&callback))
     {
-      PltObject callback = (*it).second;
-      PltObject rr;
+      ZObject rr;
       A.clear();
-      A.push_back(PObjFromKlassObj(&reqObj));
-      argDict->clear();
+      A.push_back(ZObjFromKlassObj(reqObj));
+      ZDict_clear(argDict);
       char* qstr = FCGX_GetParam("QUERY_STRING",req.envp);
       if(strcmp(method,"GET") == 0 && qstr)
       {
@@ -233,7 +233,7 @@ PltObject APP_RUN(PltObject* args,int32_t n)
              break;
           eq[0] = url_decode(eq[0]);
           eq[1] = url_decode(eq[1]);
-          argDict->emplace(PObjFromStr(eq[0]),PObjFromStr(eq[1]));
+          ZDict_emplace(argDict,ZObjFromStr(eq[0].c_str()),ZObjFromStr(eq[1].c_str()));
         }
       }
       handleCB(req,A,callback);
@@ -255,15 +255,15 @@ PltObject APP_RUN(PltObject* args,int32_t n)
         {
           size_t len = parts.size();
           bool match = true;
-          vector<PltObject> args;
-          args.push_back(PObjFromKlassObj(&reqObj));
+          vector<ZObject> args;
+          args.push_back(ZObjFromKlassObj(reqObj));
           for(size_t j=0;j<len;j++)
           {
             if(r->parts[i][j] != parts[j])
             {
               if(r->dyn[i][j] && isValidParamVal(parts[j])) //a dynamic part
               {
-                args.push_back(PObjFromStr(parts[j]));
+                args.push_back(ZObjFromStr(parts[j].c_str()));
               }
               else
               {
@@ -294,16 +294,17 @@ PltObject APP_RUN(PltObject* args,int32_t n)
   return nil;
 }
 
-PltObject APP_DEL(PltObject* args,int32_t n)
+ZObject APP_DEL(ZObject* args,int32_t n)
 {
   if(n!=1)
-    return Plt_Err(ArgumentError,"0 arguments needed!");
-  if(args[0].type != PLT_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
-    return Plt_Err(TypeError,"'self' must be an object of app class.");
+    return Z_Err(ArgumentError,"0 arguments needed!");
+  if(args[0].type != Z_OBJ || ((KlassObject*)args[0].ptr)->klass != appKlass)
+    return Z_Err(TypeError,"'self' must be an object of app class.");
   KlassObject* self = (KlassObject*)args[0].ptr;
-  if(self->members[".routetable"].type == PLT_POINTER)
+  ZObject ptr = KlassObj_getMember(self,".routetable");
+  if(ptr.type == Z_POINTER)
   {
-    route* r = (route*)self->members[".routetable"].ptr;
+    route* r = (route*)ptr.ptr;
     delete r;
   }
   return nil;

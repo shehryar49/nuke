@@ -2,17 +2,17 @@
 #define NUKE_H_
 
 #ifdef _WIN32
-  #include "C:\\plutonium\\PltObject.h"
+  #include "C:\\zuko\\include\\zapi.h"
   #define EXPORT __declspec(dllexport)
 #else
-  #include "/opt/plutonium/PltObject.h"
+  #include "/opt/zuko/include/zapi.h"
   #define EXPORT
 #endif
 
 
 extern "C"
 {
-    EXPORT PltObject init();
+    EXPORT ZObject init();
 }
 
 #endif

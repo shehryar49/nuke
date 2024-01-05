@@ -7,34 +7,37 @@
 extern Klass* appKlass;
 extern Klass* resKlass;
 extern Klass* reqKlass;
-PltObject nil;
+ZObject nil;
 
-PltObject init()
+ZObject init()
 {
-  nil.type = PLT_NIL;
+  nil.type = Z_NIL;
   Module* m = vm_allocModule();
 
   appKlass = vm_allocKlass();
   appKlass->name = "app";
-  appKlass->members.emplace("__construct__",PObjFromMethod("__construct__",&APP_CONSTRUCT,appKlass));
-  appKlass->members.emplace("run",PObjFromMethod("run",&APP_RUN,appKlass));
-  appKlass->members.emplace("route",PObjFromMethod("route",&APP_ROUTE,appKlass));
+  Klass_addNativeMethod(appKlass,"__construct__",&APP_CONSTRUCT);
+  Klass_addNativeMethod(appKlass,"run",&APP_RUN);
+  Klass_addNativeMethod(appKlass,"route",&APP_ROUTE);
+  Klass_addNativeMethod(appKlass,"__del__",&APP_DEL);
+  
 
   resKlass = vm_allocKlass();
   resKlass->name = "response";
-  resKlass->members.emplace("__construct__",PObjFromMethod("__construct__",&RES_CONSTRUCT,resKlass));
+  Klass_addNativeMethod(resKlass,"__construct__",&RES_CONSTRUCT);
 
   reqKlass = vm_allocKlass();
   reqKlass->name = "request";
-  reqKlass->members.emplace("cookies",nil);
-  reqKlass->members.emplace("args",nil);
-  reqKlass->members.emplace("form",nil);
-  reqKlass->members.emplace("getenv",PObjFromMethod("GetParam",&GetParam,reqKlass));
+  Klass_addMember(reqKlass,"cookies",nil);
+  Klass_addMember(reqKlass,"args",nil);
+  Klass_addMember(reqKlass,"form",nil);
+  Klass_addNativeMethod(reqKlass,"getenv",&GetParam);
   
   
 
-  m->members.emplace("app",PObjFromKlass(appKlass));
-  m->members.emplace("response",PObjFromKlass(resKlass));
-  m->members.emplace("request",PObjFromKlass(reqKlass));
-  return PObjFromModule(m);
+  Module_addKlass(m,"app",appKlass);
+  Module_addKlass(m,"response",resKlass);
+  Module_addKlass(m,"request",reqKlass);
+  
+  return ZObjFromModule(m);
 }
