@@ -9,7 +9,8 @@ function sayhello(var req)
 {
   return nuke.response(
 	  "text/html",
-		"hello world!"
+		"hello world!",
+		404
   )	
 }
 function getCastByName(var req,var name)
@@ -38,12 +39,12 @@ function test_qstr(var req)
 function test_simpleForm(var req)
 {
   var payload = req.form(true)
-  println(payload)
- # payload["name"] = str(payload["name"]) # fuck firefox for not setting multipart/form content type to text
-  #payload["age"] = str(payload["age"])
- 
-  return nuke.response("text/html",json.dumps(payload))
+  #println(payload)
+  var file = payload["file"]
+	#println("Content type of uploaded file: ",file.contentType)
+return nuke.response(file.contentType,payload["file"].data)
 }
+
 var app = nuke.app()
 
 app.route("GET","/hello",sayhello) # test absolute path

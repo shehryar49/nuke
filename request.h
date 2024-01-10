@@ -228,6 +228,7 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool default
       }
       if(headername == "content-disposition")
       {
+
         if( values.size() == 2 &&
             values[0] == "form-data" &&
             values[1].length()>5 &&
@@ -239,7 +240,7 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool default
             values[1].length()>5 &&
             values[1].substr(0,5) == "name=" &&
             values[2].length() > 9 &&
-            values[2] == "filename="
+            values[2].substr(0,9) == "filename="
           )
         {
           partname = values[1].substr(5);
@@ -315,6 +316,8 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool default
         KlassObject* ko = vm_allocKlassObject(FileKlass);
         KlassObj_setMember(ko,"data",ZObjFromByteArr(bt));
         KlassObj_setMember(ko,"filename",ZObjFromStr(filename.c_str()));
+        if(contentType != "")
+          KlassObj_setMember(ko,"contentType",ZObjFromStr(contentType.c_str()));
         ZDict_emplace(payload,ZObjFromStr(partname.c_str()),ZObjFromKlassObj(ko));
       }
       else
@@ -327,6 +330,8 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool default
         KlassObject* ko = vm_allocKlassObject(FileKlass);
         KlassObj_setMember(ko,"data",ZObjFromStr(content.c_str()));
         KlassObj_setMember(ko,"filename",ZObjFromStr(filename.c_str()));
+        if(contentType != "")
+          KlassObj_setMember(ko,"contentType",ZObjFromStr(contentType.c_str()));
         ZDict_emplace(payload,ZObjFromStr(partname.c_str()),ZObjFromKlassObj(ko));
       }
       else

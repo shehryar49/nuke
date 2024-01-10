@@ -133,8 +133,19 @@ void handleCB(FCGX_Request& req,ZObject* args,int32_t n,ZObject callback)
   {
     KlassObject* obj = (KlassObject*)rr.ptr;
     const char* type = AS_STR(KlassObj_getMember(obj,".type"))->val;
-    const char* content = AS_STR(KlassObj_getMember(obj,".content"))->val;
-    FCGX_FPrintF(req.out,"Content-type: %s\r\n\r\n%s",type,content);
+    int status = AS_INT(KlassObj_getMember(obj,".status"));
+    ZObject content = KlassObj_getMember(obj,".content");
+    if(content.type == Z_STR)
+    {
+      FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n%s",type,status,AS_STR(content)->val);
+    }
+    else
+    {
+      FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n",type,status);
+      auto bt = AS_BYTEARRAY(content);
+      FCGX_PutStr((char*)(bt->arr),bt->size*sizeof(uint8_t),req.out);
+     // FCGX_PutChar();//
+    }
   }
 }
 ZObject APP_RUN(ZObject* args,int32_t n)
