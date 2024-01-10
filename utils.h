@@ -5,18 +5,22 @@
 #include <algorithm>
 using namespace std;
 
-vector<string> split(string s,const string& x)
+vector<string> split(const string& s,char x)
 {
-  unsigned int  k = 0;
-  vector<string> list;
-  while(s.find(x)!=std::string::npos)
+  vector<string> parts;
+  size_t len = s.length();
+  size_t start = 0;
+  for(size_t i = 0;i<len;i++)
   {
-    k = s.find(x);
-    list.push_back(s.substr(0,k));
-    s = s.substr(k+x.length());
+    if(s[i] == x)
+    {
+      //copy part s.substr(start,i-start)
+      parts.push_back(s.substr(start,i - start));
+      start = i+1;
+    }
   }
-  list.push_back(s);
-  return list;
+  parts.push_back(s.substr(start,len - start));
+  return parts;
 }
 bool isValidParamVal(const string& str)
 {
@@ -27,66 +31,62 @@ bool isValidParamVal(const string& str)
   }
   return true;
 }
-int to_decimal(string HEX)
+bool isalphanum(const string& str)
 {
-    int ans = 0;
-    std::reverse(HEX.begin(),HEX.end());
-    int x = 1;
-    for(auto e: HEX)
-    {
-        if(e>='0' && e<='9')
-          ans+= (e-48)*x;
-        else if(isalpha(e))
-        {
-          e = toupper(e);
-          ans+=(e-55)*x;
-        }
-        x*=16;
-    }
-    return ans;
+  for(auto ch: str)
+  {
+    if(!isalpha(ch) && !isdigit(ch))
+      return false;
+  }
+  return true;
+}
+bool isValidUrlPart(const string& str)
+{
+  for(auto ch: str)
+  {
+    if(!isalpha(ch) && !isdigit(ch) && ch!='_' && ch!='-')
+      return false;
+  }
+  return true;
+}
+vector<string> split(string s,const string& x)
+{
+	size_t  k = 0;
+	vector<string> list;
+	while( (k = s.find(x) ) != std::string::npos)
+	{
+		list.push_back(s.substr(0,k));
+		s = s.substr(k+x.length());
+	}
+	list.push_back(s);
+	return list;
+}
+int hexdigitToDecimal(char ch)
+{
+  if(ch >= 'A' && ch <='F')
+    return ch - 'A' + 10;
+  else if(ch >= 'a' && ch <='f')
+    return ch - 'a' + 10;
+  else if(ch >= '0' && ch <= '9')
+    return ch - '0';
+  return 69;
 }
 string url_decode(const string& s)
 {
     string res = "";
     int k = 0;
-    while(k<s.length())
+    size_t len = s.length();
+    while(k<len)
     {
-        if(s[k]=='%')
+        if(s[k]=='%' && k+2 < len)
         {
-            //string HEX;
-          //  HEX+=s[k+1];
-          //  HEX+=s[k+2];
-            char a = s[k+1];
-            char b = s[k+2];
             k+=2;
-            if(isalpha(a))
-            {
-              toupper(a);
-              a-=55;
-            }
-            else
-            {
-              a-=48;
-            }
-            if(isalpha(b))
-            {
-              toupper(b);
-              b-=55;
-            }
-            else
-            {
-              b-=48;
-            }
-            res += (char)(a*16 + b);
+            res += (char)( hexdigitToDecimal(s[k+1])*16 + hexdigitToDecimal(s[k+2]) );
         }
         else if(s[k]=='+')
-        {
             res+=" ";
-        }
         else
-        {
-            res+=s[k];
-        }
+          res+=s[k];
         k+=1;
     }
     return res;

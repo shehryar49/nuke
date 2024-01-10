@@ -1,0 +1,55 @@
+#-
+Just for testing purposes
+Nothing realistic!
+-#
+import nuke
+import json
+
+function sayhello(var req)
+{
+  return nuke.response(
+	  "text/html",
+		"hello world!"
+  )	
+}
+function getCastByName(var req,var name)
+{
+  return nuke.response(
+    "text/html",
+		name
+  )
+}
+function getMovieProp(var req,var propName,var movieName)
+{
+  return nuke.response(
+    "text/html",
+    format("some stupid property % of movie %",propName,movieName)
+  )
+}
+function test_qstr(var req)
+{
+  var payload = req.args()
+  println(payload)
+  return nuke.response(
+    "application/json",
+    json.dumps(payload)
+  )  
+}
+function test_simpleForm(var req)
+{
+  var payload = req.form()
+  println(payload)
+  payload["name"] = str(payload["name"]) # fuck firefox for not setting multipart/form content type to text
+  payload["age"] = str(payload["age"])
+  println(payload)
+  return nuke.response("text/html",json.dumps(payload))
+}
+var app = nuke.app()
+
+app.route("GET","/hello",sayhello) # test absolute path
+app.route("GET","/movies/cast/<name>",getCastByName) # test dynamic path
+app.route("GET","/movies/<prop>/<name>",getMovieProp) # test dynamic path 2
+app.route("GET","/test_qstr",test_qstr)
+app.route("POST","/test_simpleform",test_simpleForm)
+
+app.run("127.0.0.1:2016",10)

@@ -7,18 +7,19 @@
 extern Klass* appKlass;
 extern Klass* resKlass;
 extern Klass* reqKlass;
+Klass* FileKlass;
 ZObject nil;
 
 ZObject init()
 {
   nil.type = Z_NIL;
   Module* m = vm_allocModule();
-
+  
   appKlass = vm_allocKlass();
   appKlass->name = "app";
-  Klass_addNativeMethod(appKlass,"__construct__",&APP_CONSTRUCT);
-  Klass_addNativeMethod(appKlass,"run",&APP_RUN);
-  Klass_addNativeMethod(appKlass,"route",&APP_ROUTE);
+  Klass_addSigNativeMethod(appKlass,"__construct__",&APP_CONSTRUCT,"");
+  Klass_addSigNativeMethod(appKlass,"run",&APP_RUN,"osi");
+  Klass_addSigNativeMethod(appKlass,"route",&APP_ROUTE,"ossw");
   Klass_addNativeMethod(appKlass,"__del__",&APP_DEL);
   
 
@@ -29,15 +30,21 @@ ZObject init()
   reqKlass = vm_allocKlass();
   reqKlass->name = "request";
   Klass_addMember(reqKlass,"cookies",nil);
-  Klass_addMember(reqKlass,"args",nil);
-  Klass_addMember(reqKlass,"form",nil);
-  Klass_addNativeMethod(reqKlass,"getenv",&GetParam);
+  Klass_addSigNativeMethod(reqKlass,"getenv",&GetEnv,"os");
+  Klass_addSigNativeMethod(reqKlass,"args",&GetArgs,"o");
+  Klass_addSigNativeMethod(reqKlass,"form",&Form,"o");
   
-  
+  FileKlass = vm_allocKlass();
+  FileKlass->name = "File";
+  vm_markImportant(FileKlass); 
 
   Module_addKlass(m,"app",appKlass);
   Module_addKlass(m,"response",resKlass);
   Module_addKlass(m,"request",reqKlass);
   
   return ZObjFromModule(m);
+}
+void unload()
+{
+  vm_unmarkImportant(FileKlass);
 }
