@@ -1,7 +1,12 @@
 #ifndef REQUEST_H_
 #define REQUEST_H_
 #include "nuke.h"
+#include "utils.h"
 #include <fcgiapp.h>
+#include <vector>
+#include <string>
+using namespace std;
+
 Klass* reqKlass;
 extern ZObject nil;
 extern Klass* FileKlass;
@@ -60,7 +65,7 @@ ZObject Form(ZObject* args,int32_t n) //parses POST request and returns it
   KlassObject* self = AS_KlASSOBJ(args[0]);
   if(self->klass != reqKlass)
     return Z_Err(TypeError,"Error self must be an object of request class!");
-  
+  bool defaultText = AS_BOOL(args[1]);
   FCGX_Request* req = (FCGX_Request*)AS_PTR(KlassObj_getMember(self,".ptr"));
   char* method = FCGX_GetParam("REQUEST_METHOD",req->envp);
   
@@ -129,7 +134,7 @@ ZObject Form(ZObject* args,int32_t n) //parses POST request and returns it
     }
     payload[len] = 0;
     bool hadErr = false;
-    ZDict* dict = parse_multipart(payload,len,boundary);
+    ZDict* dict = parse_multipart(payload,len,boundary,defaultText);
     delete[] payload;
     if(dict)
       return ZObjFromDict(dict);
@@ -140,7 +145,7 @@ ZObject Form(ZObject* args,int32_t n) //parses POST request and returns it
     return Z_Err(Error,"Unknown content-type used for form!");
   return nil;
 }
-ZDict* parse_multipart(char* data,size_t len,const string& boundary)
+ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool defaultToText=false)
 {
   if(len <=2 || strncmp(data,"--",2)!=0)
     return nullptr;
@@ -260,7 +265,9 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary)
     bool boundarymatched = false;
     content.clear();
     ZByteArr* bt = NULL;
-    if(contentType != "text/html")
+    if(contentType == "text/plain" || (contentType=="" && defaultToText && filename==""))
+    ;
+    else
       bt = vm_allocByteArray();
     while (k<len)
     {
@@ -296,7 +303,11 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary)
     }
     if(!boundarymatched)
       return nullptr;
-    if(bt)
+    if(contentType == "" && defaultToText && filename=="")
+    {
+        ZDict_emplace(payload,ZObjFromStr(partname.c_str()),ZObjFromStr(content.c_str()));
+    }
+    else if(bt)
     {
       if(filename != "")
       {
