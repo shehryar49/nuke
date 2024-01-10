@@ -108,7 +108,7 @@ ZObject APP_ROUTE(ZObject* args,int32_t n)
     KlassObj_setMember(self,AS_STR(p)->val,args[3]);
   }
   //mark the callback important
-  // so the vmdoesn't free it
+  // so the vm doesn't free it
   vm_markImportant(args[3].ptr);
   return nil;
 }
@@ -144,7 +144,6 @@ void handleCB(FCGX_Request& req,ZObject* args,int32_t n,ZObject callback)
       FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n",type,status);
       auto bt = AS_BYTEARRAY(content);
       FCGX_PutStr((char*)(bt->arr),bt->size*sizeof(uint8_t),req.out);
-     // FCGX_PutChar();//
     }
   }
 }

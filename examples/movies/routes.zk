@@ -1,0 +1,7 @@
+function configRoutes(var app)
+{
+    app.route("GET","/movies",listMovies)
+    app.route("POST","/movies",addMovie)
+    app.route("DELETE","/movies/<name>",deleteMovie)
+    app.route("PUT","/movies",updateMovie)    
+}

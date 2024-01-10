@@ -7,6 +7,7 @@
 extern Klass* appKlass;
 extern Klass* resKlass;
 extern Klass* reqKlass;
+
 Klass* FileKlass;
 ZObject nil;
 
@@ -29,19 +30,20 @@ ZObject init()
 
   reqKlass = vm_allocKlass();
   reqKlass->name = "request";
-  Klass_addMember(reqKlass,"cookies",nil);
   Klass_addSigNativeMethod(reqKlass,"getenv",&GetEnv,"os");
   Klass_addSigNativeMethod(reqKlass,"args",&GetArgs,"o");
+  Klass_addSigNativeMethod(reqKlass,"json",&json,"o");
+  Klass_addSigNativeMethod(reqKlass,"data",&data,"o");
   Klass_addSigNativeMethod(reqKlass,"form",&Form,"ob");
   
   FileKlass = vm_allocKlass();
   FileKlass->name = "File";
   vm_markImportant(FileKlass); 
+  
 
   Module_addKlass(m,"app",appKlass);
   Module_addKlass(m,"response",resKlass);
   Module_addKlass(m,"request",reqKlass);
-  
   return ZObjFromModule(m);
 }
 void unload()

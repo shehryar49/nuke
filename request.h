@@ -85,7 +85,12 @@ ZObject Form(ZObject* args,int32_t n) //parses POST request and returns it
     size_t len = atoll(contentLen);
     string payload;
     payload.resize(len+1);
-    FCGX_GetLine(&payload[0],len+1,req->in);
+    size_t i = 1;
+    while(i<=len)
+    {
+      payload[i-1] = FCGX_GetChar(req->in);
+      i+=1;
+    }
     ZDict* argDict = vm_allocDict();
     if(payload.length() == 0)
       return ZObjFromDict(argDict);
@@ -144,6 +149,68 @@ ZObject Form(ZObject* args,int32_t n) //parses POST request and returns it
   else
     return Z_Err(Error,"Unknown content-type used for form!");
   return nil;
+}
+ZObject json(ZObject* args,int32_t n) //checks if content/type is applicaton/json
+{
+  KlassObject* self = AS_KlASSOBJ(args[0]);
+  if(self->klass != reqKlass)
+    return Z_Err(TypeError,"Error self must be an object of request class!");
+  FCGX_Request* req = (FCGX_Request*)AS_PTR(KlassObj_getMember(self,".ptr"));
+  char* method = FCGX_GetParam("REQUEST_METHOD",req->envp);
+  
+  if(!method || (strcmp(method,"POST")!=0 && strcmp(method,"PUT")!=0))
+    return Z_Err(Error,"No data POSTed or PUTed!");
+  
+  char* contentType = FCGX_GetParam("CONTENT_TYPE",req->envp);
+  if(!contentType)
+    return Z_Err(Error,"Error environment variable CONTENT_TYPE not found!");
+  
+  if(strcmp(contentType,"application/json") == 0)
+  {
+  
+    char* contentLen = FCGX_GetParam("CONTENT_LENGTH",req->envp);
+    if(!contentLen)
+      return Z_Err(Error,"CONTENT_LENGTH variable not found!");
+    size_t len = atoll(contentLen);
+    ZStr* payload = vm_allocString(len);
+    size_t i = 1;
+    while(i<=len)
+    {
+      payload->val[i-1] = FCGX_GetChar(req->in);
+      i+=1;
+    }
+    return ZObjFromStrPtr(payload);
+  }
+  return nil;
+}
+ZObject data(ZObject* args,int32_t n) //checks if content/type is applicaton/json
+{
+  KlassObject* self = AS_KlASSOBJ(args[0]);
+  if(self->klass != reqKlass)
+    return Z_Err(TypeError,"Error self must be an object of request class!");
+  FCGX_Request* req = (FCGX_Request*)AS_PTR(KlassObj_getMember(self,".ptr"));
+  char* method = FCGX_GetParam("REQUEST_METHOD",req->envp);
+  
+  if(!method || (strcmp(method,"POST")!=0 && strcmp(method,"PUT")!=0))
+    return Z_Err(Error,"No data POSTed or PUTed!");
+  
+  char* contentType = FCGX_GetParam("CONTENT_TYPE",req->envp);
+  if(!contentType)
+    return Z_Err(Error,"Error environment variable CONTENT_TYPE not found!");
+  
+  char* contentLen = FCGX_GetParam("CONTENT_LENGTH",req->envp);
+  if(!contentLen)
+    return Z_Err(Error,"CONTENT_LENGTH variable not found!");
+  size_t len = atoll(contentLen);
+  ZByteArr* payload = vm_allocByteArray();
+  size_t i = 1;
+  while(i<=len)
+  {
+    ZByteArr_push(payload,FCGX_GetChar(req->in));
+    i+=1;
+  }
+  return ZObjFromByteArr(payload);
+  
 }
 ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool defaultToText=false)
 {

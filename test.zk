@@ -39,10 +39,17 @@ function test_qstr(var req)
 function test_simpleForm(var req)
 {
   var payload = req.form(true)
-  #println(payload)
   var file = payload["file"]
-	#println("Content type of uploaded file: ",file.contentType)
-return nuke.response(file.contentType,payload["file"].data)
+  return nuke.response(file.contentType,payload["file"].data)
+}
+function test_json(var req)
+{
+  var payload = json.loads(req.json()) # only succeeds if content-type is application/json
+  return nuke.response(
+    "application/json",
+    json.dumps(payload),
+    200
+  )
 }
 
 var app = nuke.app()
@@ -52,5 +59,7 @@ app.route("GET","/movies/cast/<name>",getCastByName) # test dynamic path
 app.route("GET","/movies/<prop>/<name>",getMovieProp) # test dynamic path 2
 app.route("GET","/test_qstr",test_qstr)
 app.route("POST","/test_simpleform",test_simpleForm)
+app.route("PUT","/test_json",test_json)
+app.route("POST","/test_json",test_json)
 
 app.run("127.0.0.1:8080",10)

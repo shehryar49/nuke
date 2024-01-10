@@ -1,0 +1,52 @@
+#!/usr/local/bin/zuko
+
+var movies = {
+  "names": [
+    "The Cop, the gangster, the devil",
+    "Behind enemy lines",
+    "Top Gun",
+    "The Divine Move",
+    "Pawn Sacrifice",
+    "The lord of war"
+  ]
+}
+function listMovies(var req)
+{
+  return nuke.response(
+    "application/json",
+    json.dumps(movies)
+  )
+}
+
+function deleteMovie(var req,var name)
+{
+
+  var idx = movies["names"].find(name)
+  if(idx == nil)
+    return nuke.response("application/json","{'msg': 'Movie not found!'}",404)
+  
+  movies["names"].erase(idx)
+  return nuke.response("application/json","{}")
+}
+
+function addMovie(var req)
+{
+  var payload = json.loads(req.json())
+  var name = payload["name"]
+  var idx = movies["names"].find(name)
+  if(idx != nil)
+    return nuke.response("application/json","{'msg': 'Movie already exists!'}",409)
+  movies["names"].push(name)
+  return nuke.response("application/json","{}",200)
+}
+
+function updateMovie(var req)
+{
+  var payload = json.loads(req.json())
+  var name = payload["name"]
+  var idx = movies["names"].find(name)
+  if(idx == nil)
+    return nuke.response("application/json","{'msg': 'Movie does not exist!'}",404)
+  movies["names"][idx] = name
+  return nuke.response("application/json","{}",200)
+}
