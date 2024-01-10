@@ -52,4 +52,4 @@ app.route("GET","/movies/<prop>/<name>",getMovieProp) # test dynamic path 2
 app.route("GET","/test_qstr",test_qstr)
 app.route("POST","/test_simpleform",test_simpleForm)
 
-app.run("127.0.0.1:2016",10)
+app.run("127.0.0.1:8080",10)
