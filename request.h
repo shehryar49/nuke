@@ -59,7 +59,7 @@ ZObject GetArgs(ZObject* args,int32_t n) //parses QUERY_STRING and returns it
   }
   return nil;
 }
-ZDict* parse_multipart(char*,size_t,const string&);
+ZDict* parse_multipart(char*,size_t,const string&,bool);
 ZObject Form(ZObject* args,int32_t n) //parses POST request and returns it
 {
   KlassObject* self = AS_KlASSOBJ(args[0]);
@@ -265,8 +265,9 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool default
     bool boundarymatched = false;
     content.clear();
     ZByteArr* bt = NULL;
+    bool useText = false;
     if(contentType == "text/plain" || (contentType=="" && defaultToText && filename==""))
-    ;
+    useText=true;
     else
       bt = vm_allocByteArray();
     while (k<len)
@@ -294,7 +295,7 @@ ZDict* parse_multipart(char* data,size_t len,const string& boundary,bool default
       }
       else
       {
-        if(contentType == "text/html")
+        if(contentType == "text/plain" || useText)
           content += data[k];
         else
           ZByteArr_push(bt,data[k]);

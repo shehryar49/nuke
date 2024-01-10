@@ -37,11 +37,11 @@ function test_qstr(var req)
 }
 function test_simpleForm(var req)
 {
-  var payload = req.form()
+  var payload = req.form(true)
   println(payload)
-  payload["name"] = str(payload["name"]) # fuck firefox for not setting multipart/form content type to text
-  payload["age"] = str(payload["age"])
-  println(payload)
+ # payload["name"] = str(payload["name"]) # fuck firefox for not setting multipart/form content type to text
+  #payload["age"] = str(payload["age"])
+ 
   return nuke.response("text/html",json.dumps(payload))
 }
 var app = nuke.app()

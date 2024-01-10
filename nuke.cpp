@@ -32,7 +32,7 @@ ZObject init()
   Klass_addMember(reqKlass,"cookies",nil);
   Klass_addSigNativeMethod(reqKlass,"getenv",&GetEnv,"os");
   Klass_addSigNativeMethod(reqKlass,"args",&GetArgs,"o");
-  Klass_addSigNativeMethod(reqKlass,"form",&Form,"o");
+  Klass_addSigNativeMethod(reqKlass,"form",&Form,"ob");
   
   FileKlass = vm_allocKlass();
   FileKlass->name = "File";
