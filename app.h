@@ -11,8 +11,10 @@
 #include <string>
 #include <fcgiapp.h>
 #include "utils.h"
+#include <pthread.h>
+#include <semaphore.h>
 using namespace std;
-
+#define NUM_THREADS 5
 Klass* appKlass;
 
 extern "C"
@@ -112,19 +114,23 @@ ZObject APP_ROUTE(ZObject* args,int32_t n)
   vm_markImportant(args[3].ptr);
   return nil;
 }
+sem_t vmLock;
 void handleCB(FCGX_Request& req,ZObject* args,int32_t n,ZObject callback)
 {
   ZObject rr;
+  sem_wait(&vmLock);
   bool good = vm_callObject(&callback,args,(int32_t)n,&rr);
   if(!good)
   {
     ZObject msg = KlassObj_getMember((KlassObject*)rr.ptr,"msg");
     printf("Callback: %s\n",AS_STR(msg)->val);
+    sem_post(&vmLock);
     printf("[-] Invalid response by callback. Sending Status 500\n");
     FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\n");
   }
   else if(rr.type!=Z_OBJ || ((KlassObject*)rr.ptr)->klass!=resKlass)
   {
+    sem_post(&vmLock);
     puts("[-] Response returned by callback is not an object of nuke.response class!");
     puts("[-] Sending status 500 to client");
     FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\nAn internal server error ocurred");
@@ -138,15 +144,153 @@ void handleCB(FCGX_Request& req,ZObject* args,int32_t n,ZObject callback)
     if(content.type == Z_STR)
     {
       FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n%s",type,status,AS_STR(content)->val);
+      sem_post(&vmLock);
     }
     else
     {
       FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n",type,status);
       auto bt = AS_BYTEARRAY(content);
       FCGX_PutStr((char*)(bt->arr),bt->size*sizeof(uint8_t),req.out);
+      sem_post(&vmLock);
     }
   }
 }
+route* routeTable = NULL;
+
+struct workerInput
+{
+  int sock;
+  KlassObject* self;
+};
+void* worker(void* arg)
+{
+  workerInput* wI = (workerInput*)arg;
+  int sock = wI->sock;
+  KlassObject* self = wI->self;
+
+  FCGX_Request req;
+  sem_wait(&vmLock);
+  KlassObject* reqObj = vm_allocKlassObject(reqKlass);
+  vm_markImportant(reqObj); //same request object used over and over again
+  KlassObj_setMember(reqObj,".ptr",ZObjFromPtr((void*)&req));
+  sem_post(&vmLock);
+
+  FCGX_InitRequest(&req,sock,0);
+  
+
+  ZObject reqArg = ZObjFromKlassObj(reqObj);//thread safe
+  vector<ZObject> dynamicReqArgs;
+  string tmp;
+  string tmp2;
+  vector<string> parts;
+  while(FCGX_Accept_r(&req) >= 0) // thread safe
+  {
+    char* method = FCGX_GetParam("REQUEST_METHOD",req.envp);
+    char* path = FCGX_GetParam("SCRIPT_NAME",req.envp);
+    path += 5;//skip /nuke from start of url
+    tmp = path;
+    //printf("[+] Serving %s to host %s\n",tmp.c_str(),addr);
+  
+    if(tmp.length()!=1 && tmp.back() == '/')
+      tmp.pop_back();
+    tmp2 = (string)method+tmp;
+    //Check for absolute route
+    ZObject callback;
+    //thread safe StrMap_get
+    if(StrMap_get(&(self->members),tmp2.c_str(),&callback))
+    {
+      handleCB(req,&reqArg,1,callback);
+    }
+    else
+    {
+      //check for dynamic routes
+      if(tmp[0] == '/')
+        tmp.erase(tmp.begin());
+      parts = split(tmp,'/');
+      
+      size_t l = routeTable->parts.size();
+      bool handled = false;
+      for(size_t i=0;i<l;i++) //ignore first part it is always empty
+      {
+        if(routeTable->parts[i].size() == parts.size() && routeTable->reqMethods[i] == method)
+        {
+          size_t len = parts.size();
+          bool match = true;
+          dynamicReqArgs.clear();
+          dynamicReqArgs.push_back(ZObjFromKlassObj(reqObj));
+          for(size_t j=0;j<len;j++)
+          {
+            if(routeTable->dyn[i][j]) //a dynamic part
+            {
+              dynamicReqArgs.push_back(ZObjFromStr(parts[j].c_str()));
+            }
+            else if(routeTable->parts[i][j] != parts[j]) //is static
+            {
+              //static part mismatched
+              match = false;
+              break;
+            }
+            //part is either static or dynamic, only two possibilities
+            //so no else needed
+          }
+          if(match)
+          {
+            handleCB(req,&dynamicReqArgs[0],dynamicReqArgs.size(),routeTable->callbacks[i]);
+            handled = true;
+            break;
+          }
+        }
+      }
+      if(!handled)
+      {
+        printf("[-] Unhandled path %s %s requested by host. Sending Status 404\n",method,path);
+        FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 404\r\n\r\n");
+      }
+    }  
+    FCGX_Finish_r(&req);
+  }
+  return NULL;
+}
+bool running = false;
+ZObject APP_RUN(ZObject* args,int32_t n)
+{
+  if(running)
+    return Z_Err(Error,"Another app already running! Don't call app.run in callbacks!");
+  running = true;
+  KlassObject* self = (KlassObject*)args[0].ptr;
+  if(self->klass != appKlass)
+    return Z_Err(TypeError,"'self' must be an object of app class.");
+  if(args[2].i <= 0)
+    return Z_Err(ValueError,"Argument 2 must be a positive and non zero integer!");
+
+  int32_t maxConnections = AS_INT(args[2]);
+  const char* ip = AS_STR(args[1])->val;
+  
+  FCGX_Init();
+  int sock = FCGX_OpenSocket(ip,maxConnections);
+  printf("[+] Server started at %s\n",ip);
+  
+  //dynamic route table
+  routeTable = (route*)AS_PTR(KlassObj_getMember(self,".routetable"));
+
+  pthread_t threads[NUM_THREADS];
+  workerInput inputs[NUM_THREADS];
+  sem_init(&vmLock,0,1);
+  for(size_t i = 0;i<NUM_THREADS;i++)
+  {
+    inputs[i].self = self;
+    inputs[i].sock = sock;
+    pthread_create(&threads[i],NULL,worker,(void*)&inputs[i]);
+  }
+  for(size_t i=0;i<NUM_THREADS;i++)
+  {
+    void* fuckit;
+    pthread_join(threads[i],&fuckit);
+  }
+  return nil;
+}
+//blocking run
+/*
 ZObject APP_RUN(ZObject* args,int32_t n)
 {
   KlassObject* self = (KlassObject*)args[0].ptr;
@@ -167,6 +311,8 @@ ZObject APP_RUN(ZObject* args,int32_t n)
 
   FCGX_Init();
   int sock = FCGX_OpenSocket(ip,maxConnections);
+  
+  
   FCGX_Request req;
  
   KlassObject* reqObj = vm_allocKlassObject(reqKlass);
@@ -252,7 +398,7 @@ ZObject APP_RUN(ZObject* args,int32_t n)
   }
   return nil;
 }
-
+*/
 ZObject APP_DEL(ZObject* args,int32_t n)
 {
   if(n!=1)

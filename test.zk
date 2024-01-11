@@ -10,7 +10,7 @@ function sayhello(var req)
   return nuke.response(
 	  "text/html",
 		"hello world!",
-		404
+		200
   )	
 }
 function getCastByName(var req,var name)
@@ -62,4 +62,4 @@ app.route("POST","/test_simpleform",test_simpleForm)
 app.route("PUT","/test_json",test_json)
 app.route("POST","/test_json",test_json)
 
-app.run("127.0.0.1:8080",10)
+app.run("127.0.0.1:8080",100)
