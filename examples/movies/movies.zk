@@ -35,7 +35,7 @@ function addMovie(var req)
   var name = payload["name"]
   var idx = movies["names"].find(name)
   if(idx != nil)
-    return nuke.response("application/json","{'msg': 'Movie already exists!'}",409)
+    return nuke.response("application/json","{\"msg\": \"Movie already exists!\"}",409)
   movies["names"].push(name)
   return nuke.response("application/json","{}",200)
 }
@@ -46,7 +46,7 @@ function updateMovie(var req)
   var name = payload["name"]
   var idx = movies["names"].find(name)
   if(idx == nil)
-    return nuke.response("application/json","{'msg': 'Movie does not exist!'}",404)
+    return nuke.response("application/json","{\"msg\": \"Movie does not exist!\"}",404)
   movies["names"][idx] = name
   return nuke.response("application/json","{}",200)
 }

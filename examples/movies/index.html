@@ -8,12 +8,21 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <title>Courses</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="courses.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 </head>
 <script type="text/javascript">
   //use vanilla JS to render elements 
   // you can use any client side rendering framework
+  function deleteMovie(elem)
+  {
+
+    var row = this.parentElement.parentElement;
+    var name = row.children[0].innerHTML;
+    axios.delete("/nuke/movies/"+name).then(response => {
+      var tbody = row.parentElement;
+      tbody.removeChild(row);
+    });
+  }
   function loadMovies()
   {
     axios.get("/nuke/movies").then(response =>{
@@ -22,36 +31,75 @@
       div.innerHTML = "";
       var table = document.createElement("table");
       var theadRow = document.createElement("tr");
+      var thead = document.createElement("thead");
       theadRow.appendChild(document.createElement("th"));
       theadRow.appendChild(document.createElement("th"));
       theadRow.children[0].innerHTML = "Movie Name";
-      table.appendChild(theadRow);
+      theadRow.children[0].scope = "col";
+      theadRow.children[1].scope = "col";
+      thead.appendChild(theadRow);
+      table.appendChild(thead);
+      var tbody = document.createElement("tbody");
       for(var i=0;i<names.length;i++)
       {
         var row = document.createElement("tr");
         row.appendChild(document.createElement("td"));
         row.appendChild(document.createElement("td"));
         row.children[0].innerHTML = names[i];
-        table.appendChild(row);
+        var btn = document.createElement("button");
+        btn.innerHTML = "delete";
+        btn.classList.add("btn");
+        btn.classList.add("btn-danger");
+        btn.classList.add("float-end");
+        btn.onclick = deleteMovie;
+        row.children[1].appendChild(btn);
+        tbody.appendChild(row);
       }
+      table.appendChild(tbody);
       table.classList.add("table");
+      table.classList.add("table-dark");
+      
       table.classList.add("table-bordered");
       table.classList.add("table-responsive");
-      table.classList.add("table-striped");
       
       
       div.appendChild(table);
-    }).catch(function (error){
-      if(error.response)
-      {
-        console.log(error.response.data.msg);
-      }
     }); 
   }
+  function addMovie()
+  {
+    var name = document.getElementById("movieName").value;
+    var payload = {"name": name};
+    axios.post("/nuke/movies",payload).then(response => {
+      //movie added
+      //update table by either adding a new row
+      // or sending a new loadMovies() request
+      // i'm choosing the lazy way
+      loadMovies();
+    }).catch(function (error){
+     if(error.response)
+     {
+       alert(error.response.data.msg);
+     }
+  });
+  }
 </script>
+<style>
+table
+{
+
+}
+</style>
 <body onload="loadMovies()">
+    <div class="container">
+    <br><br>
+    <input class="form-control w-50" type="text" id="movieName" placeholder="Movie Name">
+    <br>
+    <button class="btn btn-success" onclick="addMovie()">Add</button>
+    <br><br>
     <div id="content">
 
+    </div>
     </div>
 </body>
 
