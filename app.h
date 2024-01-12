@@ -212,7 +212,8 @@ void* worker(void* arg)
   {
     char* method = FCGX_GetParam("REQUEST_METHOD",req.envp);
     char* path = FCGX_GetParam("SCRIPT_NAME",req.envp);
-    path += 5;//skip /nuke from start of url
+//    path += 5;//skip /nuke from start of url
+//    puts(path);
     tmp = path;
     //printf("[+] Serving %s to host %s\n",tmp.c_str(),addr);
   
