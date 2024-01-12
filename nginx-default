@@ -1,0 +1,5 @@
+ location /nuke/ {
+          fastcgi_split_path_info  ^/nuke/((.*)); 
+          include fastcgi_params;
+          fastcgi_pass 127.0.0.1:8080;
+        }
