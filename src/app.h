@@ -75,7 +75,13 @@ ZObject APP_ROUTE(ZObject* args,int32_t n)
     return Z_Err(ValueError,"Empty path passed!");
   if(path[0]!='/')
     return Z_Err(ValueError,"Error path must begin with a '/' ");
-  
+  if(path == "/")
+  {
+    KlassObj_setMember(self,"GET/",args[3]);
+    vm_markImportant(args[3].ptr);
+    return nil;
+  }
+
   vector<string> parts = split(path,'/');
   //first part is always empty becuase of the '/' at the beginning
   parts.erase(parts.begin());
