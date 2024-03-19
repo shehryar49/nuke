@@ -15,5 +15,5 @@ if(UNIX)
   target_link_libraries(nuke -lpthread)
 endif()
 
-target_link_libraries(nuke libzapi.a)
+target_link_libraries(nuke -lzapi)
 
