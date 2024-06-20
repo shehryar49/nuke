@@ -12,7 +12,7 @@
 
 extern "C"
 {
-    EXPORT ZObject init();
+    EXPORT zobject init();
 }
 
 #endif

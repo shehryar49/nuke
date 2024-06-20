@@ -9,7 +9,7 @@ else()
   link_directories(C:/zuko/lib)
 endif()
 
-add_library(nuke SHARED src/nuke.cpp)
+add_library(nuke SHARED src/nuke.cpp src/app.cpp src/response.cpp src/request.cpp src/utils.cpp)
 target_link_libraries(nuke -lfcgi)
 if(UNIX)
   target_link_libraries(nuke -lpthread)

@@ -4,50 +4,50 @@
 #include "request.h"
 #include "response.h"
 
-extern Klass* appKlass;
-extern Klass* resKlass;
-extern Klass* reqKlass;
+extern zclass* app_class;
+extern zclass* res_class;
+extern zclass* req_class;
 
-Klass* FileKlass;
-ZObject nil;
+zclass* FileKlass;
 
-ZObject init()
+zobject init()
 {
-  nil.type = Z_NIL;
-  Module* m = vm_allocModule();
+  zmodule* m = vm_alloc_zmodule();
   
-  appKlass = vm_allocKlass();
-  appKlass->name = "app";
-  Klass_addSigNativeMethod(appKlass,"__construct__",&APP_CONSTRUCT,"");
-  Klass_addSigNativeMethod(appKlass,"run",&APP_RUN,"osi");
-  Klass_addSigNativeMethod(appKlass,"route",&APP_ROUTE,"ossw");
-  Klass_addNativeMethod(appKlass,"__del__",&APP_DEL);
+  app_class = vm_alloc_zclass();
+  app_class->name = "app";
+  zclass_add_sig_method(app_class,"__construct__",&APP_CONSTRUCT,"");
+  zclass_add_sig_method(app_class,"run",&APP_RUN,"osi");
+  zclass_add_sig_method(app_class,"route",&APP_ROUTE,"ossw");
+  zclass_add_method(app_class,"__del__",&APP_DEL);
   
 
-  resKlass = vm_allocKlass();
-  resKlass->name = "response";
-  Klass_addNativeMethod(resKlass,"__construct__",&RES_CONSTRUCT);
+  res_class = vm_alloc_zclass();
+  res_class->name = "response";
+  zclass_add_method(res_class,"__construct__",&RES_CONSTRUCT);
 
-  reqKlass = vm_allocKlass();
-  reqKlass->name = "request";
-  Klass_addSigNativeMethod(reqKlass,"getenv",&GetEnv,"os");
-  Klass_addSigNativeMethod(reqKlass,"args",&GetArgs,"o");
-  Klass_addSigNativeMethod(reqKlass,"json",&json,"o");
-  Klass_addSigNativeMethod(reqKlass,"data",&data,"o");
-  Klass_addSigNativeMethod(reqKlass,"form",&Form,"ob");
+  req_class = vm_alloc_zclass();
+  req_class->name = "request";
+  zclass_add_sig_method(req_class,"getenv",&GetEnv,"os");
+  zclass_add_sig_method(req_class,"args",&GetArgs,"o");
+  zclass_add_sig_method(req_class,"json",&json,"o");
+  zclass_add_sig_method(req_class,"data",&data,"o");
   
-  FileKlass = vm_allocKlass();
+
+  zclass_add_sig_method(req_class,"form",&Form,"ob");
+  
+  FileKlass = vm_alloc_zclass();
   FileKlass->name = "File";
-  vm_markImportant(FileKlass); 
+  vm_mark_important(FileKlass); 
   
 
-  Module_addKlass(m,"app",appKlass);
-  Module_addKlass(m,"response",resKlass);
-  Module_addKlass(m,"request",reqKlass);
+  zmodule_add_class(m,"app",app_class);
+  zmodule_add_class(m,"response",res_class);
+  zmodule_add_class(m,"request",req_class);
   
-  return ZObjFromModule(m);
+  return zobj_from_module(m);
 }
 void unload()
 {
-  vm_unmarkImportant(FileKlass);
+  vm_unmark_important(FileKlass);
 }
