@@ -18,21 +18,19 @@
 #else
   #include <pthread.h>
   #include <semaphore.h>
-  #define NUKE_USE_THREADING         
+  #define NUKE_USE_THREADING  
+  #define NUM_THREADS 5       
 #endif
 
-
-#define NUM_THREADS 5
-
-
+extern zclass* app_class;
 
 extern "C"
 {
     //App methods
-    EXPORT zobject APP_CONSTRUCT(zobject*,int32_t);
-    EXPORT zobject APP_ROUTE(zobject*,int32_t);
-    EXPORT zobject APP_RUN(zobject*,int32_t);  
-    EXPORT zobject APP_DEL(zobject*,int32_t);
+    EXPORT zobject app_construct(zobject*,int32_t);
+    EXPORT zobject app_route(zobject*,int32_t);
+    EXPORT zobject app_run(zobject*,int32_t);  
+    EXPORT zobject app_del(zobject*,int32_t);
 }
 struct route //for dynamic routes (involving variables)
 {
@@ -41,12 +39,6 @@ struct route //for dynamic routes (involving variables)
   std::vector<zobject> callbacks;
   std::vector<string> reqMethods;
 };
-
-
-// Implementations
-
-extern zclass* app_class;
-extern zclass* res_class;
 
 
 #endif

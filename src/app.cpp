@@ -1,20 +1,21 @@
 #include "app.h"
+#include "response.h"
 
 zclass* app_class;
 
 //App methods
-zobject APP_CONSTRUCT(zobject* args,int32_t n)
+zobject app_construct(zobject* args,int32_t n)
 {
-  zclass_object* self = (zclass_object*)args[0].ptr;
+  zclass_object* self = AS_ClASSOBJ(args[0]);
   if(self->_klass != app_class)
     return z_err(TypeError,"'self' must be an object of app class.");
   route* r = new route;
   zclassobj_set(self,".routetable",zobj_from_ptr((void*)r)); 
   return zobj_nil(); 
 }
-zobject APP_ROUTE(zobject* args,int32_t n)
+zobject app_route(zobject* args,int32_t n)
 {
-  zclass_object* self = (zclass_object*)args[0].ptr;
+  zclass_object* self = AS_ClASSOBJ(args[0]);
   if(self->_klass != app_class)
     return z_err(TypeError,"'self' must be an object of app class.");
   zfun* fun = (zfun*)args[3].ptr;
@@ -32,7 +33,7 @@ zobject APP_ROUTE(zobject* args,int32_t n)
   if(path == "/")
   {
     zclassobj_set(self,"GET/",args[3]);
-    vm_mark_important(args[3].ptr);
+    vm_mark_important(args[3].ptr); // mark the callback function important
     return zobj_nil();
   }
 
@@ -66,8 +67,8 @@ zobject APP_ROUTE(zobject* args,int32_t n)
   //
   if(isdynamic)
   {
-    r->parts.push_back(parts);
-    r->dyn.push_back(dyn);
+    r->parts.push_back(parts); //all splitted parts
+    r->dyn.push_back(dyn); // whether each part is dynamic or not
     r->callbacks.push_back(args[3]);
     r->reqMethods.push_back(method);
   }
@@ -75,7 +76,6 @@ zobject APP_ROUTE(zobject* args,int32_t n)
   {
     string str = method + path;
     zobject p = zobj_from_str(str.c_str());
-    vm_mark_important(p.ptr); // won't be required in the future
     zclassobj_set(self,AS_STR(p)->val,args[3]);
   }
   //mark the callback important
@@ -96,11 +96,11 @@ void handleCB(FCGX_Request& req,zobject* args,int32_t n,zobject callback)
   if(!good)
   {
     zobject msg = zclassobj_get((zclass_object*)rr.ptr,"msg");
-    printf("Callback: %s\n",AS_STR(msg)->val);
+    fprintf(stderr,"Callback: %s\n",AS_STR(msg)->val);
     #ifdef NUKE_USE_THREADING
     sem_post(&vmLock);
     #endif
-    printf("[-] Invalid response by callback. Sending Status 500\n");
+    fprintf(stderr,"[-] Invalid response by callback. Sending Status 500\n");
     FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\n");
   }
   else if(rr.type!=Z_OBJ || ((zclass_object*)rr.ptr)->_klass!=res_class)
@@ -238,7 +238,7 @@ void* worker(void* arg)
   return NULL;
 }
 bool running = false;
-zobject APP_RUN(zobject* args,int32_t n)
+zobject app_run(zobject* args,int32_t n)
 {
   if(running)
     return z_err(Error,"Another app already running! Don't call app.run() in callbacks!");
@@ -283,8 +283,7 @@ zobject APP_RUN(zobject* args,int32_t n)
   #endif
   return zobj_nil();
 }
-
-zobject APP_DEL(zobject* args,int32_t n)
+zobject app_del(zobject* args,int32_t n)
 {
   if(n!=1)
     return z_err(ArgumentError,"0 arguments needed!");

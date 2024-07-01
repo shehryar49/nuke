@@ -4,9 +4,7 @@
 #include "request.h"
 #include "response.h"
 
-extern zclass* app_class;
-extern zclass* res_class;
-extern zclass* req_class;
+
 
 zclass* FileKlass;
 
@@ -16,10 +14,10 @@ zobject init()
   
   app_class = vm_alloc_zclass();
   app_class->name = "app";
-  zclass_add_sig_method(app_class,"__construct__",&APP_CONSTRUCT,"");
-  zclass_add_sig_method(app_class,"run",&APP_RUN,"osi");
-  zclass_add_sig_method(app_class,"route",&APP_ROUTE,"ossw");
-  zclass_add_method(app_class,"__del__",&APP_DEL);
+  zclass_add_sig_method(app_class,"__construct__",&app_construct,"");
+  zclass_add_sig_method(app_class,"run",&app_run,"osi");
+  zclass_add_sig_method(app_class,"route",&app_route,"ossw");
+  zclass_add_method(app_class,"__del__",&app_del);
   
 
   res_class = vm_alloc_zclass();

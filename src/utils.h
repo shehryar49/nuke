@@ -12,5 +12,6 @@ bool isValidUrlPart(const string& str);
 vector<string> split(string s,const string& x);
 int hexdigitToDecimal(char ch);
 string url_decode(const string& s);
+std::string lowercase(const std::string&);
 
 #endif
