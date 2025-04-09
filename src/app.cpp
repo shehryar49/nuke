@@ -6,135 +6,135 @@ zclass* app_class;
 //App methods
 zobject app_construct(zobject* args,int32_t n)
 {
-  zclass_object* self = AS_ClASSOBJ(args[0]);
-  if(self->_klass != app_class)
-    return z_err(TypeError,"'self' must be an object of app class.");
-  route* r = new route;
-  zclassobj_set(self,".routetable",zobj_from_ptr((void*)r)); 
-  return zobj_nil(); 
+    zclass_object* self = AS_ClASSOBJ(args[0]);
+    if(self->_klass != app_class)
+        return z_err(TypeError,"'self' must be an object of app class.");
+    route* r = new route;
+    zclassobj_set(self,".routetable",zobj_from_ptr((void*)r)); 
+    return zobj_nil(); 
 }
 zobject app_route(zobject* args,int32_t n)
 {
-  zclass_object* self = AS_ClASSOBJ(args[0]);
-  if(self->_klass != app_class)
-    return z_err(TypeError,"'self' must be an object of app class.");
-  zfun* fun = (zfun*)args[3].ptr;
-  if(fun -> opt.size!=0)
-    return z_err(ValueError,"Callback function must not take any optional args!");
+    zclass_object* self = AS_ClASSOBJ(args[0]);
+    if(self->_klass != app_class)
+        return z_err(TypeError,"'self' must be an object of app class.");
+    zfun* fun = (zfun*)args[3].ptr;
+    if(fun -> opt.size!=0)
+        return z_err(ValueError,"Callback function must not take any optional args!");
 
-  string method = AS_STR(args[1])->val;
-  route* r = (route*)AS_PTR(zclassobj_get(self,".routetable"));
-  string path = AS_STR(args[2])->val;
+    string method = AS_STR(args[1])->val;
+    route* r = (route*)AS_PTR(zclassobj_get(self,".routetable"));
+    string path = AS_STR(args[2])->val;
   
-  if(path.length() == 0)
-    return z_err(ValueError,"Empty path passed!");
-  if(path[0]!='/')
-    return z_err(ValueError,"Error path must begin with a '/' ");
-  if(path == "/")
-  {
-    zclassobj_set(self,"GET/",args[3]);
-    vm_mark_important(args[3].ptr); // mark the callback function important
-    return zobj_nil();
-  }
-
-  vector<string> parts = split(path,'/');
-  //first part is always empty becuase of the '/' at the beginning
-  parts.erase(parts.begin());
-
-  bool isdynamic = false;
-  vector<bool> dyn;
-
-  for(auto& part: parts)
-  {
-    if(part.length() == 0)
-      return z_err(ValueError,"Invalid path syntax");
-    if(part.length() >= 2 && part[0] == '<' && part.back() == '>')
+    if(path.length() == 0)
+        return z_err(ValueError,"Empty path passed!");
+    if(path[0]!='/')
+        return z_err(ValueError,"Error path must begin with a '/' ");
+    if(path == "/")
     {
-      part.erase(part.begin());
-      part.pop_back();
-      if(!isalphanum(part))
-        return z_err(ValueError,"Dynamic path variable must be alphanumeric!");
-      isdynamic = true;
-      dyn.push_back(true);
+        zclassobj_set(self,"GET/",args[3]);
+        vm_mark_important(args[3].ptr); // mark the callback function important
+        return zobj_nil();
+    }
+
+    vector<string> parts = split(path,'/');
+    //first part is always empty becuase of the '/' at the beginning
+    parts.erase(parts.begin());
+
+    bool isdynamic = false;
+    vector<bool> dyn;
+
+    for(auto& part: parts)
+    {
+        if(part.length() == 0)
+            return z_err(ValueError,"Invalid path syntax");
+        if(part.length() >= 2 && part[0] == '<' && part.back() == '>')
+        {
+            part.erase(part.begin());
+            part.pop_back();
+            if(!isalphanum(part))
+                return z_err(ValueError,"Dynamic path variable must be alphanumeric!");
+            isdynamic = true;
+            dyn.push_back(true);
+        }
+        else
+        {
+            if(!isValidUrlPart(part))
+                return z_err(ValueError,"Invalid path syntax");
+            dyn.push_back(false);
+        }
+    }
+    //
+    if(isdynamic)
+    {
+        r->parts.push_back(parts); //all splitted parts
+        r->dyn.push_back(dyn); // whether each part is dynamic or not
+        r->callbacks.push_back(args[3]);
+        r->reqMethods.push_back(method);
     }
     else
     {
-      if(!isValidUrlPart(part))
-        return z_err(ValueError,"Invalid path syntax");
-      dyn.push_back(false);
+        string str = method + path;
+        zobject p = zobj_from_str(str.c_str());
+        zclassobj_set(self,AS_STR(p)->val,args[3]);
     }
-  }
-  //
-  if(isdynamic)
-  {
-    r->parts.push_back(parts); //all splitted parts
-    r->dyn.push_back(dyn); // whether each part is dynamic or not
-    r->callbacks.push_back(args[3]);
-    r->reqMethods.push_back(method);
-  }
-  else
-  {
-    string str = method + path;
-    zobject p = zobj_from_str(str.c_str());
-    zclassobj_set(self,AS_STR(p)->val,args[3]);
-  }
-  //mark the callback important
-  // so the vm doesn't free it
-  vm_mark_important(args[3].ptr);
-  return zobj_nil();
+    //mark the callback important
+    // so the vm doesn't free it
+    vm_mark_important(args[3].ptr);
+    return zobj_nil();
 }
 #ifdef NUKE_USE_THREADING
-sem_t vmLock;
+sem_t vm_lock;
 #endif
 void handleCB(FCGX_Request& req,zobject* args,int32_t n,zobject callback)
 {
-  zobject rr;
-  #ifdef NUKE_USE_THREADING
-  sem_wait(&vmLock);
-  #endif
-  bool good = vm_call_object(&callback,args,(int32_t)n,&rr);
-  if(!good)
-  {
-    zobject msg = zclassobj_get((zclass_object*)rr.ptr,"msg");
-    fprintf(stderr,"Callback: %s\n",AS_STR(msg)->val);
+    zobject rr;
     #ifdef NUKE_USE_THREADING
-    sem_post(&vmLock);
+    sem_wait(&vm_lock);
     #endif
-    fprintf(stderr,"[-] Invalid response by callback. Sending Status 500\n");
-    FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\n");
-  }
-  else if(rr.type!=Z_OBJ || ((zclass_object*)rr.ptr)->_klass!=res_class)
-  {
-    #ifdef NUKE_USE_THREADING
-    sem_post(&vmLock);
-    #endif
-    puts("[-] Response returned by callback is not an object of nuke.response class!");
-    puts("[-] Sending status 500 to client");
-    FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\nAn internal server error ocurred");
-  }
-  else
-  {
-    zclass_object* obj = (zclass_object*)rr.ptr;
-    const char* type = AS_STR(zclassobj_get(obj,".type"))->val;
-    int status = AS_INT(zclassobj_get(obj,".status"));
-    zobject content = zclassobj_get(obj,".content");
-    if(content.type == Z_STR)
+    bool good = vm_call_object(&callback,args,(int32_t)n,&rr);
+    if(!good)
     {
-      FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n%s",type,status,AS_STR(content)->val);
-      #ifdef NUKE_USE_THREADING
-      sem_post(&vmLock);
-      #endif
+        zobject msg = zclassobj_get((zclass_object*)rr.ptr,"msg");
+        fprintf(stderr,"Callback: %s\n",AS_STR(msg)->val);
+        #ifdef NUKE_USE_THREADING
+        sem_post(&vm_lock);
+        #endif
+        fprintf(stderr,"[-] Invalid response by callback. Sending Status 500\n");
+        FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\n");
+    }
+    else if(rr.type!=Z_OBJ || ((zclass_object*)rr.ptr)->_klass!=res_class)
+    {
+        #ifdef NUKE_USE_THREADING
+            sem_post(&vm_lock);
+        #endif
+        puts("[-] Response returned by callback is not an object of nuke.response class!");
+        puts("[-] Sending status 500 to client");
+        FCGX_FPrintF(req.out,"Content-type: text/html\r\nStatus: 500\r\n\r\nAn internal server error ocurred");
     }
     else
     {
-      FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n",type,status);
-      auto bt = AS_BYTEARRAY(content);
-      FCGX_PutStr((char*)(bt->arr),bt->size*sizeof(uint8_t),req.out);
-      #ifdef NUKE_USE_THREADING
-      sem_post(&vmLock);
-      #endif
+        zclass_object* obj = (zclass_object*)rr.ptr;
+        const char* type = AS_STR(zclassobj_get(obj,".type"))->val;
+        int status = AS_INT(zclassobj_get(obj,".status"));
+        zobject content = zclassobj_get(obj,".content");
+        if(content.type == Z_STR)
+        {
+            FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n%s",type,status,AS_STR(content)->val);
+            #ifdef NUKE_USE_THREADING
+            sem_post(&vm_lock);
+            #endif
+        }
+        else
+        {
+            FCGX_FPrintF(req.out,"Content-type: %s\r\nStatus: %d\r\n\r\n",type,status);
+            auto bt = AS_BYTEARRAY(content);
+            FCGX_PutStr((char*)(bt->arr),bt->size*sizeof(uint8_t),req.out);
+            #ifdef NUKE_USE_THREADING
+            sem_post(&vm_lock);
+            #endif
+        }
     }
-  }
 }
 
 
@@ -152,7 +152,7 @@ void* worker(void* arg)
   route* routeTable = wI->routeTable;
   FCGX_Request req;
   #ifdef NUKE_USE_THREADING
-  sem_wait(&vmLock);
+  sem_wait(&vm_lock);
   #endif
   zclass_object* reqObj = vm_alloc_zclassobj(req_class);
   vm_mark_important(reqObj); //same request object used over and over again
@@ -183,7 +183,7 @@ void* worker(void* arg)
     //Check for absolute route
     zobject callback;
     //thread safe StrMap_get
-    if(StrMap_get(&(self->members),tmp2.c_str(),&callback))
+    if(strmap_get(&(self->members),tmp2.c_str(),&callback))
     {
       handleCB(req,&reqArg,1,callback);
     }
@@ -261,7 +261,7 @@ zobject app_run(zobject* args,int32_t n)
   #ifdef NUKE_USE_THREADING
     pthread_t threads[NUM_THREADS];
     workerInput inputs[NUM_THREADS];
-    sem_init(&vmLock,0,1);
+    sem_init(&vm_lock,0,1);
     for(size_t i = 0;i<NUM_THREADS;i++)
     {
       inputs[i].self = self;
